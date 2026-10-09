@@ -16,7 +16,8 @@ import {
   Clock,
   RotateCcw,
   Copy,
-  Check
+  Check,
+  AlertCircle
 } from 'lucide-react';
 import { TaskStep } from '@/types/agent';
 import TaskTimeline from '@/components/TaskTimeline';
@@ -29,28 +30,16 @@ interface ChatHistoryItem {
   outputContent?: string;
 }
 
-const DEFAULT_HISTORY: ChatHistoryItem[] = [
-  {
-    id: 'chat-1',
-    title: 'Write email to seek leave for 2 days',
-    timestamp: 'Just now',
-    tasks: [
-      { step_id: 'step_1', title: 'Analyzing leave request reason and dates', tool: 'reasoning_engine', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Extracted 2-day leave intent' },
-      { step_id: 'step_2', title: 'Drafting formal leave application email content', tool: 'email_writer', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Drafted leave email for Manager' },
-      { step_id: 'step_3', title: 'Dispatching leave request email to Manager', tool: 'system_api', args: {}, status: 'REQUIRES_APPROVAL', requires_approval: true, risk_level: 'HIGH' },
-      { step_id: 'step_4', title: 'Generating final response and email copy', tool: 'summarizer', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
-    ],
-    outputContent: `Subject: Application for Leave of Absence\n\nDear Manager,\n\nI am writing to formally request 2 days of leave from [Start Date] to [End Date] due to personal reasons.\n\nI have ensured that all my pending tasks are handed over to the team, and I will be reachable via email for urgent matters.\n\nThank you for your understanding.\n\nBest regards,\n[Your Name]`
-  }
-];
+const DEFAULT_HISTORY: ChatHistoryItem[] = [];
 
 export default function CopilotPage() {
   const [input, setInput] = useState("");
   const [isPlanning, setIsPlanning] = useState(false);
   const [tasks, setTasks] = useState<TaskStep[]>([]);
   const [finalOutput, setFinalOutput] = useState<string | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>(DEFAULT_HISTORY);
+  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -62,7 +51,9 @@ export default function CopilotPage() {
         try {
           const parsed = JSON.parse(savedHistory);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setChatHistory(parsed);
+            // Filter out old mock chat history items
+            const filtered = parsed.filter((item: ChatHistoryItem) => item.id !== 'chat-1');
+            setChatHistory(filtered);
           }
         } catch (e) {
           console.error('Failed to parse chat history from localStorage:', e);
@@ -73,8 +64,12 @@ export default function CopilotPage() {
 
   // Save chat history to localStorage whenever it changes
   useEffect(() => {
-    if (typeof window !== 'undefined' && chatHistory.length > 0) {
-      localStorage.setItem('copilot_chat_history', JSON.stringify(chatHistory));
+    if (typeof window !== 'undefined') {
+      if (chatHistory.length > 0) {
+        localStorage.setItem('copilot_chat_history', JSON.stringify(chatHistory));
+      } else {
+        localStorage.removeItem('copilot_chat_history');
+      }
     }
   }, [chatHistory]);
 
@@ -136,7 +131,7 @@ export default function CopilotPage() {
   const simulateSpeechInput = () => {
     setIsListening(true);
     const samplePhrases = [
-      "Write an email seeking leave for 2 days due to personal reasons",
+      "Write an email seeking leave for 2 days",
       "Plan a 3-day trip to Tokyo and book the hotels",
       "Deploy the Express backend to production server"
     ];
@@ -159,6 +154,7 @@ export default function CopilotPage() {
     setInput("");
     setTasks([]);
     setFinalOutput(null);
+    setBackendError(null);
   };
 
   const handleSelectChat = (chat: ChatHistoryItem) => {
@@ -166,6 +162,7 @@ export default function CopilotPage() {
     setInput(chat.title);
     setTasks(chat.tasks);
     setFinalOutput(chat.outputContent || null);
+    setBackendError(null);
   };
 
   const handleDeleteChat = (e: React.MouseEvent, id: string) => {
@@ -173,7 +170,11 @@ export default function CopilotPage() {
     const updated = chatHistory.filter(item => item.id !== id);
     setChatHistory(updated);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('copilot_chat_history', JSON.stringify(updated));
+      if (updated.length > 0) {
+        localStorage.setItem('copilot_chat_history', JSON.stringify(updated));
+      } else {
+        localStorage.removeItem('copilot_chat_history');
+      }
     }
     if (activeChatId === id) {
       handleStartNewChat();
@@ -196,6 +197,7 @@ export default function CopilotPage() {
     setIsPlanning(true);
     setTasks([]);
     setFinalOutput(null);
+    setBackendError(null);
 
     let planData: TaskStep[] = [];
     let outputText: string | null = null;
@@ -207,50 +209,35 @@ export default function CopilotPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: textToUse })
       });
-      if (!res.ok) throw new Error('Backend server returned error');
+
+      if (!res.ok) {
+        throw new Error(`Backend server responded with status: ${res.status}`);
+      }
+
       const data = await res.json();
       planData = data.tasks || [];
       outputText = data.outputContent || null;
-    } catch (err) {
-      console.warn('Backend API offline or error; using local plan generator:', err);
-      const textLower = textToUse.toLowerCase();
-      if (textLower.includes('leave') || textLower.includes('email')) {
-        planData = [
-          { step_id: 'step_1', title: `Analyzing leave request: "${textToUse}"`, tool: 'reasoning_engine', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Extracted leave intent' },
-          { step_id: 'step_2', title: 'Drafting formal leave application email', tool: 'email_writer', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Drafted leave email text' },
-          { step_id: 'step_3', title: 'Dispatching leave request to Manager', tool: 'system_api', args: {}, status: 'REQUIRES_APPROVAL', requires_approval: true, risk_level: 'HIGH' },
-          { step_id: 'step_4', title: 'Finalizing leave email document', tool: 'summarizer', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
-        ];
-        outputText = `Subject: Application for Leave of Absence\n\nDear Manager,\n\nI am writing to formally request a leave of absence for 2 days due to personal commitments.\n\nI have delegated my active tasks to the team to ensure smooth workflow.\n\nSincerely,\n[Your Name]`;
-      } else {
-        planData = [
-          { step_id: 'step_1', title: `Analyzing request: "${textToUse}"`, tool: 'reasoning_engine', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Extracted request intent' },
-          { step_id: 'step_2', title: 'Searching knowledge base & APIs', tool: 'web_search', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Fetched parameters' },
-          { step_id: 'step_3', title: 'Executing requested modification', tool: 'system_api', args: {}, status: 'REQUIRES_APPROVAL', requires_approval: true, risk_level: 'HIGH' },
-          { step_id: 'step_4', title: 'Generating final summary', tool: 'summarizer', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
-        ];
-        outputText = `Processed request: "${textToUse}"\n\nAll tasks verified.`;
-      }
-    }
-    
-    setTasks(planData);
-    setIsPlanning(false);
 
-    const newChatId = `chat-${Date.now()}`;
-    const newHistoryItem: ChatHistoryItem = {
-      id: newChatId,
-      title: textToUse,
-      timestamp: 'Just now',
-      tasks: planData,
-      outputContent: outputText || undefined
-    };
+      setTasks(planData);
+      setFinalOutput(outputText);
+      setIsPlanning(false);
 
-    const updatedHistory = [newHistoryItem, ...chatHistory];
-    setChatHistory(updatedHistory);
-    setActiveChatId(newChatId);
+      const newChatId = `chat-${Date.now()}`;
+      const newHistoryItem: ChatHistoryItem = {
+        id: newChatId,
+        title: textToUse,
+        timestamp: 'Just now',
+        tasks: planData,
+        outputContent: outputText || undefined
+      };
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('copilot_chat_history', JSON.stringify(updatedHistory));
+      const updatedHistory = [newHistoryItem, ...chatHistory];
+      setChatHistory(updatedHistory);
+      setActiveChatId(newChatId);
+    } catch (err: any) {
+      console.warn('Backend API connection error:', err);
+      setIsPlanning(false);
+      setBackendError('Backend API is not connected. Connect the backend server to generate and process plans.');
     }
   };
 
@@ -414,15 +401,28 @@ export default function CopilotPage() {
             </p>
           </div>
 
+          {/* Backend Connection Error Banner */}
+          {backendError && (
+            <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-sm font-medium flex items-center gap-3 mb-6 shadow-sm animate-fadeIn">
+              <div className="p-2 bg-amber-100 rounded-xl text-amber-600 shrink-0">
+                <AlertCircle size={20} />
+              </div>
+              <div>
+                <p className="font-bold text-amber-900">Backend Not Connected</p>
+                <p className="text-xs text-amber-700 mt-0.5">{backendError}</p>
+              </div>
+            </div>
+          )}
+
           {/* Execution / Timeline Area */}
           <div className="mb-8">
-            {tasks.length === 0 && !isPlanning && (
+            {tasks.length === 0 && !isPlanning && !backendError && (
               <div className="flex flex-col items-center justify-center h-52 border-2 border-dashed border-rose-200/60 rounded-3xl text-slate-400 bg-white/70 backdrop-blur-md p-6 text-center shadow-lg shadow-purple-50/50">
                 <div className="p-3 bg-gradient-to-tr from-rose-100 via-purple-100 to-indigo-100 rounded-2xl mb-3 text-rose-500">
                   <Sparkles size={28} />
                 </div>
                 <p className="font-bold text-slate-700 text-sm">Your interactive agent plan will appear here...</p>
-                <p className="text-xs text-slate-400 mt-1">Type a prompt (e.g. "Write an email to seek leave") or click mic to start.</p>
+                <p className="text-xs text-slate-400 mt-1">Type a prompt or click mic to start once backend is connected.</p>
               </div>
             )}
 
@@ -487,7 +487,8 @@ export default function CopilotPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={isListening ? "Listening..." : "Ask Copilot AI or click mic to speak..."}
-                    className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus:border-none ring-0 border-0 shadow-none resize-none py-1.5 text-slate-800 max-h-24 text-sm placeholder:text-slate-400 font-medium"
+                    className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-none ring-0 shadow-none resize-none py-1.5 text-slate-800 max-h-24 text-sm placeholder:text-slate-400 font-medium"
+                    style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
                     rows={1}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
