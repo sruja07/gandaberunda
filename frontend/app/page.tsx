@@ -210,32 +210,32 @@ export default function CopilotPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#ffffff] text-[#222222] font-sans selection:bg-[#ffd1da] overflow-hidden">
+    <div className="flex h-screen w-screen bg-white text-[#222222] font-sans overflow-hidden">
       
-      {/* Sidebar - Recent Chat History (Airbnb surface-soft #f7f7f7 and crisp hairline borders) */}
+      {/* Sidebar - Fixed flex width with shrink-0 so it NEVER squishes */}
       <aside 
-        className={`bg-[#f7f7f7] border-r border-[#ebebeb] flex flex-col transition-all duration-300 z-30 ${
-          sidebarOpen ? 'w-80' : 'w-0 -translate-x-full'
+        className={`bg-[#f7f7f7] border-r border-[#ebebeb] flex flex-col shrink-0 transition-all duration-300 z-30 ${
+          sidebarOpen ? 'w-72' : 'w-0 overflow-hidden border-none'
         }`}
       >
-        <div className="p-5 border-b border-[#ebebeb] flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold text-[15px] text-[#222222]">
+        <div className="p-4 border-b border-[#ebebeb] flex items-center justify-between min-w-[288px]">
+          <div className="flex items-center gap-2 font-semibold text-sm text-[#222222]">
             <Clock size={16} className="text-[#ff385c]" />
             <span>Recent Chats</span>
           </div>
           <button 
             onClick={() => setSidebarOpen(false)}
-            className="p-1.5 text-[#6a6a6a] hover:text-[#222222] hover:bg-[#ebebeb] rounded-full transition-colors md:hidden"
+            className="p-1.5 text-[#6a6a6a] hover:text-[#222222] hover:bg-[#ebebeb] rounded-full transition-colors"
           >
             <PanelLeftClose size={18} />
           </button>
         </div>
 
-        {/* New Chat Button - Rausch Brand Accent */}
-        <div className="p-4">
+        {/* New Chat Button */}
+        <div className="p-4 min-w-[288px]">
           <button 
             onClick={handleStartNewChat}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#ff385c] hover:bg-[#e00b41] text-white font-medium rounded-full text-[14px] transition-all shadow-sm active:scale-95"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#ff385c] hover:bg-[#e00b41] text-white font-medium rounded-full text-sm transition-all shadow-sm active:scale-95 whitespace-nowrap"
           >
             <Plus size={16} />
             <span>New Chat</span>
@@ -243,30 +243,30 @@ export default function CopilotPage() {
         </div>
 
         {/* Chat History List */}
-        <div className="flex-1 overflow-y-auto px-3 space-y-1 py-2">
+        <div className="flex-1 overflow-y-auto px-3 space-y-1 py-2 min-w-[288px]">
           {chatHistory.map((chat) => (
             <div
               key={chat.id}
               onClick={() => handleSelectChat(chat)}
-              className={`group flex items-center justify-between p-3 rounded-[12px] cursor-pointer transition-all ${
+              className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
                 activeChatId === chat.id 
-                  ? 'bg-white text-[#222222] font-semibold shadow-[0_2px_6px_rgba(0,0,0,0.04)] border border-[#dddddd]' 
+                  ? 'bg-white text-[#222222] font-semibold shadow-sm border border-[#dddddd]' 
                   : 'hover:bg-[#ebebeb]/60 text-[#3f3f3f]'
               }`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
                 <MessageSquare size={16} className={activeChatId === chat.id ? 'text-[#ff385c] shrink-0' : 'text-[#929292] shrink-0'} />
                 <div className="truncate">
-                  <p className="text-[14px] truncate leading-tight">{chat.title}</p>
-                  <p className="text-[11px] text-[#6a6a6a] mt-0.5">{chat.timestamp}</p>
+                  <p className="text-xs font-medium truncate leading-tight">{chat.title}</p>
+                  <p className="text-[10px] text-[#6a6a6a] mt-0.5">{chat.timestamp}</p>
                 </div>
               </div>
               <button
                 onClick={(e) => handleDeleteChat(e, chat.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-[#6a6a6a] hover:text-[#ff385c] rounded transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 text-[#6a6a6a] hover:text-[#ff385c] rounded transition-all shrink-0"
                 title="Delete Chat"
               >
-                <Trash2 size={14} />
+                <Trash2 size={13} />
               </button>
             </div>
           ))}
@@ -274,17 +274,19 @@ export default function CopilotPage() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#ffffff]">
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-y-auto relative bg-white">
         {/* Top Header Nav */}
         <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-[#ebebeb]">
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 text-[#222222] hover:bg-[#f7f7f7] rounded-full transition-colors"
-              title="Toggle Sidebar"
-            >
-              {sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeft size={20} />}
-            </button>
+            {!sidebarOpen && (
+              <button 
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 text-[#222222] hover:bg-[#f7f7f7] rounded-full transition-colors"
+                title="Open Sidebar"
+              >
+                <PanelLeft size={20} />
+              </button>
+            )}
             <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
               <div className="p-1.5 bg-[#ff385c] rounded-lg text-white">
                 <Sparkles size={18} />
@@ -304,9 +306,9 @@ export default function CopilotPage() {
           {/* Execution / Timeline Area */}
           <div className="mb-12">
             {tasks.length === 0 && !isPlanning && (
-              <div className="flex flex-col items-center justify-center h-56 border border-dashed border-[#dddddd] rounded-[20px] text-[#6a6a6a] bg-[#f7f7f7]/50 p-6 text-center">
+              <div className="flex flex-col items-center justify-center h-56 border border-dashed border-[#dddddd] rounded-2xl text-[#6a6a6a] bg-[#f7f7f7]/50 p-6 text-center">
                 <Sparkles size={28} className="text-[#ff385c] mb-2 opacity-80" />
-                <p className="font-semibold text-[#222222] text-[15px]">Your agent plan will appear here...</p>
+                <p className="font-semibold text-[#222222] text-sm">Your agent plan will appear here...</p>
                 <p className="text-xs text-[#6a6a6a] mt-1">Type a prompt or click the microphone button below to start.</p>
               </div>
             )}
@@ -314,7 +316,7 @@ export default function CopilotPage() {
             {isPlanning && (
               <div className="flex flex-col items-center justify-center h-56 space-y-3">
                 <Loader2 className="animate-spin text-[#ff385c]" size={32} />
-                <p className="font-semibold text-[#222222] text-[15px]">Reasoning and building your action plan...</p>
+                <p className="font-semibold text-[#222222] text-sm">Reasoning and building your action plan...</p>
               </div>
             )}
 
@@ -323,9 +325,9 @@ export default function CopilotPage() {
             )}
           </div>
 
-          {/* Bottom Pill Input Bar (Airbnb Search Bar Style: Pill rounded full, white background, shadow tier) */}
+          {/* Bottom Input Bar */}
           <div className="fixed bottom-6 left-0 right-0 px-6 pointer-events-none">
-            <div className="max-w-3xl mx-auto pointer-events-auto">
+            <div className="max-w-2xl mx-auto pointer-events-auto">
               
               {/* Listening Voice Status Indicator */}
               {isListening && (
@@ -338,7 +340,7 @@ export default function CopilotPage() {
               <div className="bg-white border border-[#dddddd] rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.08)] p-2 focus-within:border-[#222222] transition-all">
                 <div className="flex items-center gap-2 px-3 py-1">
                   <button 
-                    className="p-2 text-[#6a6a6a] hover:text-[#222222] rounded-full hover:bg-[#f7f7f7] transition-all"
+                    className="p-2 text-[#6a6a6a] hover:text-[#222222] rounded-full hover:bg-[#f7f7f7] transition-all shrink-0"
                     title="Attach File"
                   >
                     <Paperclip size={18} />
@@ -361,7 +363,7 @@ export default function CopilotPage() {
                   {/* Microphone Button */}
                   <button 
                     onClick={toggleMic}
-                    className={`p-2.5 rounded-full transition-all ${
+                    className={`p-2.5 rounded-full transition-all shrink-0 ${
                       isListening 
                         ? 'bg-[#ff385c] text-white animate-pulse shadow-md' 
                         : 'text-[#6a6a6a] hover:text-[#222222] hover:bg-[#f7f7f7]'
@@ -371,7 +373,7 @@ export default function CopilotPage() {
                     {isListening ? <MicOff size={18} /> : <Mic size={18} />}
                   </button>
 
-                  {/* Send Search Orb Button (Airbnb Primary Rausch Search Orb) */}
+                  {/* Send Button */}
                   <button 
                     onClick={() => handleGeneratePlan()}
                     disabled={!input || isPlanning}
