@@ -8,6 +8,12 @@ from langgraph.graph import StateGraph, START, END
 from backend.agent.planner_prompt import SYSTEM_PLANNER_PROMPT
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.env"))
+load_dotenv(dotenv_path)
+load_dotenv()
 
 api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 client = genai.Client(api_key=api_key) if api_key else None
