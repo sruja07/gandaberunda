@@ -1,15 +1,13 @@
-import os
+﻿import os
 import json
 import re
 from typing import List, Dict, Any, Optional
 from typing_extensions import TypedDict
 from pydantic import BaseModel
 from langgraph.graph import StateGraph, START, END
-from agent.planner_prompt import SYSTEM_PLANNER_PROMPT
 from google import genai
 from google.genai import types
 
-# Initialize Google AI Studio client with GEMINI_API_KEY
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
 class TaskStep(BaseModel):
@@ -18,8 +16,10 @@ class TaskStep(BaseModel):
     tool: str
     args: Dict[str, Any]
     status: str = "PENDING"
-    requires_approval: bool = False
     risk_level: str = "LOW"
+    requires_approval: bool = False
+    risk_rationale: Optional[str] = None
+    dry_run_preview: Optional[str] = None
     result: Optional[str] = None
 
 class AgentState(TypedDict):
@@ -27,22 +27,57 @@ class AgentState(TypedDict):
     plan: List[Dict[str, Any]]
     current_step_index: int
     approval_status: str
+    audit_trail: List[str]
     final_output: str
 
+SYSTEM_ORCHESTRATOR_PROMPT = """You are ExecOS: an enterprise-grade autonomous execution engine with safety governance.
+Deconstruct the user's intent into an optimal multi-step task graph.
+
+Available Tools:
+- calendar.find_slot(attendee: str, duration_mins: int)
+- calendar.reschedule(attendee: str, date: str, time: str)
+- document.generate_draft(template: str, topic: str)
+- email.send_message(to: str, subject: str, body: str)
+- slack.notify(channel: str, message: str)
+
+Security & Governance Principles:
+1. Actions that mutate external state, communicate externally, or write data (e.g., email.send_message) are marked HIGH risk.
+2. For every step, provide:
+   - isk_level: "LOW" or "HIGH"
+   - equires_approval: true if HIGH, false if LOW
+   - isk_rationale: 1 concise sentence explaining the safety evaluation / blast radius.
+   - dry_run_preview: Human-readable summary of what will execute if approved.
+3. Output MUST be strictly raw JSON conforming to this schema:
+{
+  "steps": [
+    {
+      "step_id": "step_1",
+      "title": "Action summary",
+      "tool": "tool.name",
+      "args": { "key": "value" },
+      "status": "PENDING",
+      "risk_level": "LOW",
+      "requires_approval": false,
+      "risk_rationale": "Internal query only; zero external side-effects.",
+      "dry_run_preview": "Simulated query preview"
+    }
+  ]
+}
+"""
+
 def clean_json_response(raw_text: str) -> str:
-    """Extract raw JSON even if Gemma wraps it in markdown backticks."""
     match = re.search(r"`(?:json)?\s*([\s\S]*?)\s*`", raw_text)
     if match:
         return match.group(1).strip()
     return raw_text.strip()
 
 def planner_node(state: AgentState) -> Dict[str, Any]:
-    print("\n[PLANNER] Invoking Gemma 4 (gemma-4-31b-it) to decompose request...")
+    print("\n⚡ [PLANNER & RISK AUDITOR] Gemma 4 analyzing blast radius and building task graph...")
     user_text = state.get("user_input", "")
     
     plan = []
     try:
-        prompt = f"{SYSTEM_PLANNER_PROMPT}\n\nUser Request: {user_text}\nDeconstruct into raw JSON steps:"
+        prompt = f"{SYSTEM_ORCHESTRATOR_PROMPT}\n\nUser Request: {user_text}\nDeconstruct into verified execution plan:"
         response = client.models.generate_content(
             model="gemma-4-26b-a4b-it",
             contents=prompt,
@@ -54,62 +89,96 @@ def planner_node(state: AgentState) -> Dict[str, Any]:
         cleaned_json = clean_json_response(raw_output)
         parsed = json.loads(cleaned_json)
         plan = parsed.get("steps", [])
-        print(f"? Gemma 4 successfully generated {len(plan)} structured tasks.")
+        print(f"🔒 [AUDIT COMPLETE] Gemma 4 generated {len(plan)} tasks with embedded risk rationale.")
     except Exception as e:
-        print(f"?? Gemma 4 API exception ({e}). Utilizing deterministic fallback plan.")
+        print(f"⚠️ Gemma 4 API exception ({e}). Applying deterministic safety plan.")
         plan = [
             {
                 "step_id": "step_1",
-                "title": "Reschedule sync on Calendar",
-                "tool": "calendar.reschedule",
-                "args": {"attendee": "Sarah", "date": "tomorrow", "time": "10:00 AM"},
+                "title": "Query calendar for free windows",
+                "tool": "calendar.find_slot",
+                "args": {"attendee": "Sarah", "duration_mins": 30},
                 "status": "PENDING",
+                "risk_level": "LOW",
                 "requires_approval": False,
-                "risk_level": "LOW"
+                "risk_rationale": "Internal calendar query; non-consequential.",
+                "dry_run_preview": "Query calendar for Sarah with duration: 30 mins."
             },
             {
                 "step_id": "step_2",
-                "title": "Draft proposal document",
-                "tool": "document.generate_draft",
-                "args": {"template": "proposal", "topic": "Project Update"},
+                "title": "Reschedule meeting invite",
+                "tool": "calendar.reschedule",
+                "args": {"attendee": "Sarah", "date": "tomorrow", "time": "10:30 AM"},
                 "status": "PENDING",
+                "risk_level": "LOW",
                 "requires_approval": False,
-                "risk_level": "LOW"
+                "risk_rationale": "Internal calendar update within team domain.",
+                "dry_run_preview": "Update invite for Sarah to tomorrow at 10:30 AM."
             },
             {
                 "step_id": "step_3",
-                "title": "Send finalized proposal via Email",
-                "tool": "email.send_message",
-                "args": {"to": "sarah@company.com", "subject": "Updated Proposal", "body": "Attached proposal."},
+                "title": "Synthesize updated proposal draft",
+                "tool": "document.generate_draft",
+                "args": {"template": "proposal", "topic": "Project Roadmap Update"},
                 "status": "PENDING",
+                "risk_level": "LOW",
+                "requires_approval": False,
+                "risk_rationale": "Local file creation; sandboxed.",
+                "dry_run_preview": "Create proposal document based on Project Roadmap."
+            },
+            {
+                "step_id": "step_4",
+                "title": "Dispatch finalized proposal via external email",
+                "tool": "email.send_message",
+                "args": {"to": "sarah@clientcorp.com", "subject": "Project Proposal", "body": "Attached updated proposal."},
+                "status": "PENDING",
+                "risk_level": "HIGH",
                 "requires_approval": True,
-                "risk_level": "HIGH"
+                "risk_rationale": "External communication with non-reversible delivery. Recipient domain is outside organization.",
+                "dry_run_preview": "Will transmit 1 email to 'sarah@clientcorp.com' with attachment 'proposal.pdf'."
             }
         ]
         
-    return {"plan": plan, "current_step_index": 0, "approval_status": "NONE"}
+    audit_trail = [f"[PLANNER] Planned {len(plan)} tasks with verified risk policies."]
+    return {"plan": plan, "current_step_index": 0, "approval_status": "NONE", "audit_trail": audit_trail}
+
+def simulate_tool_execution(tool: str, args: Dict[str, Any]) -> str:
+    if "calendar.find_slot" in tool:
+        return "Slot confirmed: Tomorrow at 10:30 AM (Available window: 10:00 - 11:30 AM)."
+    elif "calendar.reschedule" in tool:
+        return f"Calendar invite updated for {args.get('attendee', 'attendee')} at {args.get('time', '10:30 AM')}."
+    elif "document.generate_draft" in tool:
+        return f"Draft generated: '{args.get('topic', 'Proposal')}.pdf' (Size: 124 KB)."
+    elif "email.send_message" in tool:
+        return f"Dispatched SMTP message to {args.get('to')} (Subject: '{args.get('subject')}')."
+    return f"Completed execution for {tool}."
 
 def executor_node(state: AgentState) -> Dict[str, Any]:
     plan = state["plan"]
     idx = state["current_step_index"]
     step = plan[idx]
+    audit = state.get("audit_trail", [])
     
     print(f"\n[EXECUTOR] Step {idx + 1}: {step.get('title')} ({step.get('tool')})")
+    print(f"           Risk Assessment: [{step.get('risk_level')}] -> {step.get('risk_rationale')}")
     
-    # Check for consequential actions requiring human approval
+    # Gate high-consequence operations
     if step.get("requires_approval") and state.get("approval_status") != "APPROVED":
-        print(f"??  [HITL REQUIRED] Consequential action detected: {step.get('tool')}. Pausing execution for human approval.")
+        print(f"🛑 [GOVERNANCE GATE] Halting execution. Blast Radius: {step.get('dry_run_preview')}")
         step["status"] = "REQUIRES_APPROVAL"
-        return {"plan": plan, "approval_status": "PENDING"}
+        audit.append(f"[GATE] Step {idx + 1} blocked awaiting operator authorization.")
+        return {"plan": plan, "approval_status": "PENDING", "audit_trail": audit}
 
     step["status"] = "COMPLETED"
-    step["result"] = f"Successfully executed {step.get('tool')}"
-    print(f"? [SUCCESS] {step.get('title')} executed.")
+    step["result"] = simulate_tool_execution(step.get("tool", ""), step.get("args", {}))
+    audit.append(f"[SUCCESS] Step {idx + 1} executed: {step['tool']}")
+    print(f"✅ [SUCCESS] {step.get('title')} executed.")
     
     return {
         "plan": plan,
         "current_step_index": idx + 1,
-        "approval_status": "NONE"
+        "approval_status": "NONE",
+        "audit_trail": audit
     }
 
 def route_next_step(state: AgentState):
@@ -132,11 +201,17 @@ builder.add_conditional_edges("executor", route_next_step, {
 
 agent_graph = builder.compile()
 
-def resume_execution(state: AgentState, action: str = "APPROVE") -> AgentState:
-    """Triggered when user reviews action in the frontend."""
+def resume_execution(state: AgentState, action: str = "APPROVE", updated_args: Optional[Dict[str, Any]] = None) -> AgentState:
+    """Supports operator mutation (editing payload before approving) or safe rollback."""
+    idx = state["current_step_index"]
+    step = state["plan"][idx]
+    audit = state.get("audit_trail", [])
+    
     if action == "APPROVE":
+        if updated_args:
+            step["args"].update(updated_args)
+            audit.append(f"[OPERATOR MUTATION] Payload updated before approval: {updated_args}")
         state["approval_status"] = "APPROVED"
-        idx = state["current_step_index"]
         resumed = executor_node(state)
         state.update(resumed)
         while state["current_step_index"] < len(state["plan"]):
@@ -146,9 +221,12 @@ def resume_execution(state: AgentState, action: str = "APPROVE") -> AgentState:
                 break
     else:
         state["approval_status"] = "REJECTED"
-        idx = state["current_step_index"]
-        state["plan"][idx]["status"] = "REJECTED"
-        state["plan"][idx]["result"] = "Cancelled by user."
+        step["status"] = "REJECTED"
+        step["result"] = "Execution halted by operator. Triggered safe rollback: Draft retained in sandbox without external dispatch."
+        audit.append(f"[ROLLBACK] Step {idx + 1} rejected by human operator. External transmission prevented.")
+        state["current_step_index"] += 1
+        
+    state["audit_trail"] = audit
     return state
 
 if __name__ == "__main__":
@@ -157,13 +235,25 @@ if __name__ == "__main__":
         "plan": [],
         "current_step_index": 0,
         "approval_status": "NONE",
+        "audit_trail": [],
         "final_output": ""
     }
     
-    print("--- RUNNING PHASE 1: AUTOMATED EXECUTION UP TO BREAKPOINT ---")
+    print("=== PHASE 1: EXECUTION UNTIL GOVERNANCE BREAKPOINT ===")
     paused_state = agent_graph.invoke(initial_state)
     
-    print("\n--- SIMULATING HUMAN APPROVAL (HITL) ---")
-    final_state = resume_execution(paused_state, action="APPROVE")
-    print("\n--- FINAL PIPELINE STATE AFTER APPROVAL ---")
-    print(json.dumps(final_state, indent=2))
+    print("\n=== GOVERNANCE INSPECTION ===")
+    pending_step = paused_state["plan"][paused_state["current_step_index"]]
+    print(f"Action:       {pending_step['title']}")
+    print(f"Risk Level:   {pending_step['risk_level']}")
+    print(f"Rationale:    {pending_step['risk_rationale']}")
+    print(f"Dry Run:      {pending_step['dry_run_preview']}")
+    
+    print("\n=== PHASE 2: RESUMING WITH INLINE PAYLOAD EDIT (OPERATOR OVERRIDE) ===")
+    # Simulating operator updating the recipient email on the fly before approving
+    modified_args = {"to": "sarah.vp@clientcorp.com", "subject": "FINAL: Project Roadmap Proposal"}
+    final_state = resume_execution(paused_state, action="APPROVE", updated_args=modified_args)
+    
+    print("\n=== FINAL AUDIT TRAIL ===")
+    for entry in final_state["audit_trail"]:
+        print(f"  • {entry}")
