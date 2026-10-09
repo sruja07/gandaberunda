@@ -1,4 +1,4 @@
-# Gandaberundha
+# Gandaberunda
 
 A full-stack application structure with dedicated **Frontend** and **Backend** directories.
 
