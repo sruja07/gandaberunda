@@ -113,11 +113,9 @@ export default function CopilotPage() {
           recognitionRef.current.start();
           setIsListening(true);
         } catch (e) {
-          // Fallback simulation if Speech API fails or is restricted in environment
           simulateSpeechInput();
         }
       } else {
-        // Fallback simulation for unsupported browsers
         simulateSpeechInput();
       }
     }
@@ -170,7 +168,6 @@ export default function CopilotPage() {
     setIsPlanning(true);
     setTasks([]);
 
-    // 1. Simulated Reasoning Delay
     await new Promise(r => setTimeout(r, 1200));
 
     const mockPlan: TaskStep[] = [
@@ -183,7 +180,6 @@ export default function CopilotPage() {
     setTasks(mockPlan);
     setIsPlanning(false);
 
-    // Save to chat history
     const newChatId = `chat-${Date.now()}`;
     const newHistoryItem: ChatHistoryItem = {
       id: newChatId,
@@ -194,7 +190,6 @@ export default function CopilotPage() {
     setChatHistory(prev => [newHistoryItem, ...prev]);
     setActiveChatId(newChatId);
 
-    // 2. Execute steps automatically
     for (let i = 0; i < mockPlan.length; i++) {
       const id = mockPlan[i].step_id;
       setTasks(prev => prev.map(t => t.step_id === id ? { ...t, status: 'IN_PROGRESS' } : t));
@@ -203,7 +198,7 @@ export default function CopilotPage() {
 
       if (mockPlan[i].requires_approval) {
         setTasks(prev => prev.map(t => t.step_id === id ? { ...t, status: 'REQUIRES_APPROVAL' } : t));
-        return; // Halt until approved
+        return;
       }
       
       setTasks(prev => prev.map(t => t.step_id === id ? { ...t, status: 'COMPLETED', result: 'Completed successfully' } : t));
@@ -215,34 +210,34 @@ export default function CopilotPage() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-100 overflow-hidden">
+    <div className="flex h-screen bg-[#ffffff] text-[#222222] font-sans selection:bg-[#ffd1da] overflow-hidden">
       
-      {/* Sidebar - Recent Chat History */}
+      {/* Sidebar - Recent Chat History (Airbnb surface-soft #f7f7f7 and crisp hairline borders) */}
       <aside 
-        className={`bg-white border-r border-slate-200 flex flex-col transition-all duration-300 z-30 ${
+        className={`bg-[#f7f7f7] border-r border-[#ebebeb] flex flex-col transition-all duration-300 z-30 ${
           sidebarOpen ? 'w-80' : 'w-0 -translate-x-full'
         }`}
       >
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-lg text-slate-800">
-            <Clock size={18} className="text-blue-600" />
+        <div className="p-5 border-b border-[#ebebeb] flex items-center justify-between">
+          <div className="flex items-center gap-2 font-semibold text-[15px] text-[#222222]">
+            <Clock size={16} className="text-[#ff385c]" />
             <span>Recent Chats</span>
           </div>
           <button 
             onClick={() => setSidebarOpen(false)}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors md:hidden"
+            className="p-1.5 text-[#6a6a6a] hover:text-[#222222] hover:bg-[#ebebeb] rounded-full transition-colors md:hidden"
           >
             <PanelLeftClose size={18} />
           </button>
         </div>
 
-        {/* New Chat Button */}
+        {/* New Chat Button - Rausch Brand Accent */}
         <div className="p-4">
           <button 
             onClick={handleStartNewChat}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-all shadow-sm shadow-blue-200 active:scale-95"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#ff385c] hover:bg-[#e00b41] text-white font-medium rounded-full text-[14px] transition-all shadow-sm active:scale-95"
           >
-            <Plus size={18} />
+            <Plus size={16} />
             <span>New Chat</span>
           </button>
         </div>
@@ -253,22 +248,22 @@ export default function CopilotPage() {
             <div
               key={chat.id}
               onClick={() => handleSelectChat(chat)}
-              className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
+              className={`group flex items-center justify-between p-3 rounded-[12px] cursor-pointer transition-all ${
                 activeChatId === chat.id 
-                  ? 'bg-blue-50 text-blue-700 font-medium border border-blue-100' 
-                  : 'hover:bg-slate-50 text-slate-700'
+                  ? 'bg-white text-[#222222] font-semibold shadow-[0_2px_6px_rgba(0,0,0,0.04)] border border-[#dddddd]' 
+                  : 'hover:bg-[#ebebeb]/60 text-[#3f3f3f]'
               }`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
-                <MessageSquare size={16} className={activeChatId === chat.id ? 'text-blue-600 shrink-0' : 'text-slate-400 shrink-0'} />
+                <MessageSquare size={16} className={activeChatId === chat.id ? 'text-[#ff385c] shrink-0' : 'text-[#929292] shrink-0'} />
                 <div className="truncate">
-                  <p className="text-sm truncate">{chat.title}</p>
-                  <p className="text-[11px] text-slate-400">{chat.timestamp}</p>
+                  <p className="text-[14px] truncate leading-tight">{chat.title}</p>
+                  <p className="text-[11px] text-[#6a6a6a] mt-0.5">{chat.timestamp}</p>
                 </div>
               </div>
               <button
                 onClick={(e) => handleDeleteChat(e, chat.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 rounded transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 text-[#6a6a6a] hover:text-[#ff385c] rounded transition-all"
                 title="Delete Chat"
               >
                 <Trash2 size={14} />
@@ -279,47 +274,47 @@ export default function CopilotPage() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto relative">
-        {/* Navbar */}
-        <header className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-slate-200/50">
+      <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#ffffff]">
+        {/* Top Header Nav */}
+        <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-[#ebebeb]">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors"
+              className="p-2 text-[#222222] hover:bg-[#f7f7f7] rounded-full transition-colors"
               title="Toggle Sidebar"
             >
               {sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeft size={20} />}
             </button>
             <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-              <div className="p-1.5 bg-blue-600 rounded-lg text-white shadow-sm">
+              <div className="p-1.5 bg-[#ff385c] rounded-lg text-white">
                 <Sparkles size={18} />
               </div>
-              <span>Copilot<span className="text-blue-600">AI</span></span>
+              <span className="text-[#222222]">Copilot<span className="text-[#ff385c]">AI</span></span>
             </div>
           </div>
-          <UserCircle className="text-slate-400 cursor-pointer hover:text-blue-600 transition-colors" size={30} />
+          <UserCircle className="text-[#6a6a6a] cursor-pointer hover:text-[#ff385c] transition-colors" size={30} />
         </header>
 
         <main className="flex-1 max-w-3xl w-full mx-auto px-6 pb-40">
-          <div className="text-center my-12">
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3">How can I help you today?</h1>
-            <p className="text-slate-500 text-base md:text-lg">Tell me your goal by text or voice, and I'll handle the rest.</p>
+          <div className="text-center my-10">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2 text-[#222222]">How can I help you today?</h1>
+            <p className="text-[#6a6a6a] text-sm md:text-base">Tell me your goal by text or voice, and I'll handle the rest.</p>
           </div>
 
           {/* Execution / Timeline Area */}
           <div className="mb-12">
             {tasks.length === 0 && !isPlanning && (
-              <div className="flex flex-col items-center justify-center h-60 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 bg-white/60 p-6 text-center">
-                <Sparkles size={32} className="text-slate-300 mb-2" />
-                <p className="font-medium text-slate-500">Your agent plan will appear here...</p>
-                <p className="text-xs text-slate-400 mt-1">Try typing a prompt or clicking the microphone icon below.</p>
+              <div className="flex flex-col items-center justify-center h-56 border border-dashed border-[#dddddd] rounded-[20px] text-[#6a6a6a] bg-[#f7f7f7]/50 p-6 text-center">
+                <Sparkles size={28} className="text-[#ff385c] mb-2 opacity-80" />
+                <p className="font-semibold text-[#222222] text-[15px]">Your agent plan will appear here...</p>
+                <p className="text-xs text-[#6a6a6a] mt-1">Type a prompt or click the microphone button below to start.</p>
               </div>
             )}
 
             {isPlanning && (
-              <div className="flex flex-col items-center justify-center h-60 space-y-4">
-                <Loader2 className="animate-spin text-blue-600" size={36} />
-                <p className="font-semibold text-slate-700">Reasoning and building your action plan...</p>
+              <div className="flex flex-col items-center justify-center h-56 space-y-3">
+                <Loader2 className="animate-spin text-[#ff385c]" size={32} />
+                <p className="font-semibold text-[#222222] text-[15px]">Reasoning and building your action plan...</p>
               </div>
             )}
 
@@ -328,32 +323,32 @@ export default function CopilotPage() {
             )}
           </div>
 
-          {/* Bottom Floating Bar with Voice & Input */}
+          {/* Bottom Pill Input Bar (Airbnb Search Bar Style: Pill rounded full, white background, shadow tier) */}
           <div className="fixed bottom-6 left-0 right-0 px-6 pointer-events-none">
             <div className="max-w-3xl mx-auto pointer-events-auto">
               
               {/* Listening Voice Status Indicator */}
               {isListening && (
-                <div className="mb-2 mx-auto w-max px-4 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-full shadow-lg flex items-center gap-2 animate-bounce">
+                <div className="mb-2 mx-auto w-max px-4 py-1.5 bg-[#ff385c] text-white text-xs font-semibold rounded-full shadow-md flex items-center gap-2 animate-bounce">
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
                   Listening to your voice... Speak now!
                 </div>
               )}
 
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-xl p-2 focus-within:ring-2 ring-blue-500/20 transition-all">
-                <div className="flex items-center gap-2 p-1">
+              <div className="bg-white border border-[#dddddd] rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.08)] p-2 focus-within:border-[#222222] transition-all">
+                <div className="flex items-center gap-2 px-3 py-1">
                   <button 
-                    className="p-2 text-slate-400 hover:text-blue-600 rounded-xl hover:bg-slate-50 transition-all"
+                    className="p-2 text-[#6a6a6a] hover:text-[#222222] rounded-full hover:bg-[#f7f7f7] transition-all"
                     title="Attach File"
                   >
-                    <Paperclip size={20} />
+                    <Paperclip size={18} />
                   </button>
 
                   <textarea 
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={isListening ? "Listening..." : "Ask Copilot AI or click mic to speak..."}
-                    className="w-full bg-transparent border-none focus:ring-0 resize-none py-2 text-slate-900 max-h-32 text-sm md:text-base placeholder:text-slate-400"
+                    className="w-full bg-transparent border-none focus:ring-0 resize-none py-1.5 text-[#222222] max-h-24 text-sm placeholder:text-[#929292] font-normal"
                     rows={1}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -366,21 +361,21 @@ export default function CopilotPage() {
                   {/* Microphone Button */}
                   <button 
                     onClick={toggleMic}
-                    className={`p-2.5 rounded-xl transition-all ${
+                    className={`p-2.5 rounded-full transition-all ${
                       isListening 
-                        ? 'bg-red-500 text-white animate-pulse shadow-md shadow-red-200' 
-                        : 'text-slate-500 hover:text-blue-600 hover:bg-slate-100'
+                        ? 'bg-[#ff385c] text-white animate-pulse shadow-md' 
+                        : 'text-[#6a6a6a] hover:text-[#222222] hover:bg-[#f7f7f7]'
                     }`}
                     title={isListening ? "Stop listening" : "Click to speak"}
                   >
-                    {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                    {isListening ? <MicOff size={18} /> : <Mic size={18} />}
                   </button>
 
-                  {/* Send Button */}
+                  {/* Send Search Orb Button (Airbnb Primary Rausch Search Orb) */}
                   <button 
                     onClick={() => handleGeneratePlan()}
                     disabled={!input || isPlanning}
-                    className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl transition-all shadow-md shadow-blue-200 shrink-0 active:scale-95"
+                    className="p-2.5 bg-[#ff385c] hover:bg-[#e00b41] disabled:bg-[#ffd1da] text-white rounded-full transition-all shadow-sm shrink-0 active:scale-95"
                     title="Send prompt"
                   >
                     <Send size={18} />

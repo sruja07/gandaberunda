@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { TaskStep } from '@/types/agent';
-import { CheckCircle2, Circle, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -16,56 +16,57 @@ interface TimelineProps {
 
 export default function TaskTimeline({ tasks, onApprove }: TimelineProps) {
   return (
-    <div className="relative space-y-8 pl-8 py-4">
-      {/* The guiding vertical line */}
-      <div className="absolute left-3 top-4 bottom-4 w-0.5 bg-slate-200 dark:bg-slate-800" />
+    <div className="relative space-y-6 pl-8 py-2">
+      {/* Guiding vertical timeline bar */}
+      <div className="absolute left-[11px] top-3 bottom-3 w-[2px] bg-[#ebebeb]" />
 
       {tasks.map((task) => (
         <div key={task.step_id} className="relative group">
           {/* Status Icon Dot */}
           <div className={cn(
-            "absolute -left-7 top-1 w-6 h-6 rounded-full border-4 border-white dark:border-slate-950 z-10 flex items-center justify-center transition-all duration-500",
-            task.status === 'COMPLETED' && "bg-emerald-500",
-            task.status === 'IN_PROGRESS' && "bg-blue-500 animate-pulse",
-            task.status === 'REQUIRES_APPROVAL' && "bg-amber-500",
-            task.status === 'PENDING' && "bg-slate-300 dark:bg-slate-700"
+            "absolute -left-[27px] top-2 w-6 h-6 rounded-full border-2 border-white z-10 flex items-center justify-center transition-all duration-300 shadow-sm",
+            task.status === 'COMPLETED' && "bg-[#008a05] text-white",
+            task.status === 'IN_PROGRESS' && "bg-[#ff385c] text-white animate-pulse",
+            task.status === 'REQUIRES_APPROVAL' && "bg-[#e07a00] text-white",
+            task.status === 'PENDING' && "bg-[#dddddd] text-[#6a6a6a]"
           )}>
-            {task.status === 'COMPLETED' && <CheckCircle2 size={10} className="text-white" />}
-            {task.status === 'IN_PROGRESS' && <Loader2 size={10} className="text-white animate-spin" />}
-            {task.status === 'REQUIRES_APPROVAL' && <AlertCircle size={10} className="text-white" />}
+            {task.status === 'COMPLETED' && <CheckCircle2 size={12} className="text-white" />}
+            {task.status === 'IN_PROGRESS' && <Loader2 size={12} className="text-white animate-spin" />}
+            {task.status === 'REQUIRES_APPROVAL' && <AlertCircle size={12} className="text-white" />}
           </div>
 
-          {/* Task Card */}
+          {/* Task Card - Airbnb Design Principles: 14px rounded md, hairline border, crisp typography */}
           <div className={cn(
-            "p-5 rounded-2xl border transition-all duration-300",
-            task.status === 'IN_PROGRESS' ? "bg-blue-50 border-blue-200 shadow-sm" : 
-            task.status === 'REQUIRES_APPROVAL' ? "bg-amber-50 border-amber-200 shadow-md ring-1 ring-amber-300" : 
-            "bg-white border-slate-200 hover:border-slate-300",
-            "dark:bg-slate-900 dark:border-slate-800"
+            "p-5 rounded-[14px] border transition-all duration-200",
+            task.status === 'IN_PROGRESS' ? "bg-[#fff5f7] border-[#ffb3c1] shadow-sm" : 
+            task.status === 'REQUIRES_APPROVAL' ? "bg-[#fff9f0] border-[#ffe2b3] shadow-md ring-1 ring-[#ffd188]" : 
+            "bg-white border-[#dddddd] hover:border-[#c1c1c1] shadow-[0_2px_6px_rgba(0,0,0,0.04)]"
           )}>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{task.tool}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6a6a6a]">{task.tool}</span>
                   {task.risk_level === 'HIGH' && (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600">High Risk</span>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#fff0f0] text-[#c13515] border border-[#ffc4c4]">
+                      High Risk
+                    </span>
                   )}
                 </div>
                 <h3 className={cn(
-                  "font-medium transition-colors",
-                  task.status === 'PENDING' ? "text-slate-400" : "text-slate-900 dark:text-white"
+                  "text-[15px] font-semibold leading-snug transition-colors",
+                  task.status === 'PENDING' ? "text-[#929292]" : "text-[#222222]"
                 )}>
                   {task.title}
                 </h3>
                 {task.result && (
-                  <p className="text-sm text-slate-500 mt-1 italic">"{task.result}"</p>
+                  <p className="text-[13px] text-[#6a6a6a] mt-1 font-normal italic">"{task.result}"</p>
                 )}
               </div>
 
               {task.status === 'REQUIRES_APPROVAL' && (
                 <button 
                   onClick={() => onApprove(task.step_id)}
-                  className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold transition-all active:scale-95"
+                  className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#ff385c] hover:bg-[#e00b41] text-white rounded-full text-[14px] font-semibold transition-all shadow-sm active:scale-95 shrink-0"
                 >
                   Approve <ArrowRight size={14} />
                 </button>
