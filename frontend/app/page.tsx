@@ -54,9 +54,15 @@ export default function CopilotPage() {
             // Filter out any legacy mock chat items created during mock testing phase
             const filtered = parsed.filter((item: ChatHistoryItem) => {
               if (item.id === 'chat-1') return false;
-              if (item.tasks && item.tasks.some(t => t.step_id === 'step_1' || t.tool === 'reasoning_engine')) return false;
-              if (item.outputContent && item.outputContent.includes('Application for Leave of Absence')) return false;
-              return true;
+              if (item.title && item.title.toLowerCase().includes('write the email')) return false;
+              if (item.tasks && item.tasks.some(t => t.step_id === 'step_1' || t.tool === 'reasoning_engine' || t.tool === 'email_writer')) return false;
+              if (item.outputContent && (
+                item.outputContent.includes('Application for Leave') || 
+                item.outputContent.includes('Dear Manager') ||
+                item.outputContent.includes('Tokyo 3-Day Travel') ||
+                item.outputContent.includes('Processed request:')
+              )) return false;
+              return item.tasks && item.tasks.length > 0;
             });
             setChatHistory(filtered);
             if (filtered.length === 0) {
@@ -232,18 +238,20 @@ export default function CopilotPage() {
       setFinalOutput(outputText);
       setIsPlanning(false);
 
-      const newChatId = `chat-${Date.now()}`;
-      const newHistoryItem: ChatHistoryItem = {
-        id: newChatId,
-        title: textToUse,
-        timestamp: 'Just now',
-        tasks: planData,
-        outputContent: outputText || undefined
-      };
+      if (planData.length > 0) {
+        const newChatId = `chat-${Date.now()}`;
+        const newHistoryItem: ChatHistoryItem = {
+          id: newChatId,
+          title: textToUse,
+          timestamp: 'Just now',
+          tasks: planData,
+          outputContent: outputText || undefined
+        };
 
-      const updatedHistory = [newHistoryItem, ...chatHistory];
-      setChatHistory(updatedHistory);
-      setActiveChatId(newChatId);
+        const updatedHistory = [newHistoryItem, ...chatHistory];
+        setChatHistory(updatedHistory);
+        setActiveChatId(newChatId);
+      }
     } catch (err: any) {
       console.warn('Backend API not connected:', err);
       setIsPlanning(false);
