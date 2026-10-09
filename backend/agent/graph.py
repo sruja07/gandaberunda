@@ -83,66 +83,141 @@ def planner_node(state: AgentState) -> Dict[str, Any]:
             
         print(f"[AUDIT COMPLETE] Gemma 4 generated {len(plan)} tasks with embedded risk rationale.")
     except Exception as e:
-        print(f"[FALLBACK] Gemma 4 API exception ({e}). Applying deterministic safety plan.")
-        plan = [
-            {
-                "step_id": "step_1",
-                "title": "Query calendar for free windows",
-                "tool": "calendar.find_slot",
-                "args": {"attendee": "Sarah", "duration_mins": 30},
-                "status": "PENDING",
-                "risk_level": "LOW",
-                "requires_approval": False,
-                "risk_rationale": "Internal calendar query; non-consequential.",
-                "dry_run_preview": "Query calendar for Sarah with duration: 30 mins."
-            },
-            {
-                "step_id": "step_2",
-                "title": "Reschedule meeting invite",
-                "tool": "calendar.reschedule",
-                "args": {"attendee": "Sarah", "date": "tomorrow", "time": "10:30 AM"},
-                "status": "PENDING",
-                "risk_level": "LOW",
-                "requires_approval": False,
-                "risk_rationale": "Internal calendar update within team domain.",
-                "dry_run_preview": "Update invite for Sarah to tomorrow at 10:30 AM."
-            },
-            {
-                "step_id": "step_3",
-                "title": "Synthesize updated proposal draft",
-                "tool": "document.generate_draft",
-                "args": {"template": "proposal", "topic": "Project Roadmap Update"},
-                "status": "PENDING",
-                "risk_level": "LOW",
-                "requires_approval": False,
-                "risk_rationale": "Local file creation; sandboxed.",
-                "dry_run_preview": "Create proposal document based on Project Roadmap."
-            },
-            {
-                "step_id": "step_4",
-                "title": "Dispatch finalized proposal via external email",
-                "tool": "email.send_message",
-                "args": {"to": "sarah@clientcorp.com", "subject": "Project Proposal", "body": "Attached updated proposal."},
-                "status": "PENDING",
-                "risk_level": "HIGH",
-                "requires_approval": True,
-                "risk_rationale": "External communication with non-reversible delivery. Recipient domain is outside organization.",
-                "dry_run_preview": "Will transmit 1 email to 'sarah@clientcorp.com' with attachment 'proposal.pdf'."
-            }
-        ]
+        print(f"[FALLBACK] Gemma 4 API note ({e}). Building prompt-aware task graph for: '{user_text}'.")
+        text_lower = user_text.lower().strip()
+
+        if text_lower in ["hi", "hello", "hey", "good morning", "good evening", "greetings"]:
+            plan = [
+                {
+                    "step_id": "step_1",
+                    "title": "Acknowledge greeting & query user intent",
+                    "tool": "assistant.reply",
+                    "args": {"message": user_text},
+                    "status": "PENDING",
+                    "risk_level": "LOW",
+                    "requires_approval": False,
+                    "risk_rationale": "Standard greeting response; zero blast radius.",
+                    "dry_run_preview": "Greet user and await task input."
+                }
+            ]
+        elif any(k in text_lower for k in ["email", "leave", "mail", "send email", "draft"]):
+            plan = [
+                {
+                    "step_id": "step_1",
+                    "title": f"Analyze email intent: '{user_text}'",
+                    "tool": "reasoning_engine",
+                    "args": {"request": user_text},
+                    "status": "PENDING",
+                    "risk_level": "LOW",
+                    "requires_approval": False,
+                    "risk_rationale": "Extracting request details and parameters.",
+                    "dry_run_preview": f"Parse email parameters from request: '{user_text}'"
+                },
+                {
+                    "step_id": "step_2",
+                    "title": "Draft email message content",
+                    "tool": "email_writer",
+                    "args": {"type": "email_draft", "subject": user_text},
+                    "status": "PENDING",
+                    "risk_level": "LOW",
+                    "requires_approval": False,
+                    "risk_rationale": "Sandboxed document generation.",
+                    "dry_run_preview": f"Draft content for: '{user_text}'"
+                },
+                {
+                    "step_id": "step_3",
+                    "title": "Dispatch finalized email message",
+                    "tool": "email.send_message",
+                    "args": {"recipient": "manager@company.com", "subject": user_text},
+                    "status": "PENDING",
+                    "risk_level": "HIGH",
+                    "requires_approval": True,
+                    "risk_rationale": "External communication with non-reversible delivery; requires human authorization.",
+                    "dry_run_preview": f"Will transmit email dispatch for: '{user_text}'"
+                }
+            ]
+        elif any(k in text_lower for k in ["meeting", "reschedule", "calendar", "sarah"]):
+            plan = [
+                {
+                    "step_id": "step_1",
+                    "title": "Query calendar for free windows",
+                    "tool": "calendar.find_slot",
+                    "args": {"attendee": "Sarah", "duration_mins": 30},
+                    "status": "PENDING",
+                    "risk_level": "LOW",
+                    "requires_approval": False,
+                    "risk_rationale": "Internal calendar query; non-consequential.",
+                    "dry_run_preview": "Query calendar for Sarah with duration: 30 mins."
+                },
+                {
+                    "step_id": "step_2",
+                    "title": "Reschedule meeting invite",
+                    "tool": "calendar.reschedule",
+                    "args": {"attendee": "Sarah", "date": "tomorrow", "time": "10:30 AM"},
+                    "status": "PENDING",
+                    "risk_level": "LOW",
+                    "requires_approval": False,
+                    "risk_rationale": "Internal calendar update within team domain.",
+                    "dry_run_preview": "Update invite for Sarah to tomorrow at 10:30 AM."
+                },
+                {
+                    "step_id": "step_3",
+                    "title": "Dispatch updated invitation notice",
+                    "tool": "email.send_message",
+                    "args": {"to": "sarah@clientcorp.com", "subject": "Rescheduled Meeting Invite"},
+                    "status": "PENDING",
+                    "risk_level": "HIGH",
+                    "requires_approval": True,
+                    "risk_rationale": "External email update crosses organization boundary.",
+                    "dry_run_preview": "Will send calendar update notice to sarah@clientcorp.com"
+                }
+            ]
+        else:
+            plan = [
+                {
+                    "step_id": "step_1",
+                    "title": f"Analyze request: '{user_text}'",
+                    "tool": "reasoning_engine",
+                    "args": {"query": user_text},
+                    "status": "PENDING",
+                    "risk_level": "LOW",
+                    "requires_approval": False,
+                    "risk_rationale": "Deconstruct user request parameters.",
+                    "dry_run_preview": f"Analyze intent for: '{user_text}'"
+                },
+                {
+                    "step_id": "step_2",
+                    "title": f"Execute task operations for: '{user_text}'",
+                    "tool": "web_search",
+                    "args": {"query": user_text},
+                    "status": "PENDING",
+                    "risk_level": "LOW",
+                    "requires_approval": False,
+                    "risk_rationale": "Search context and verify execution payload.",
+                    "dry_run_preview": f"Fetch relevant data for: '{user_text}'"
+                }
+            ]
         
     audit_trail = [f"[PLANNER] Planned {len(plan)} tasks with verified risk policies."]
     return {"plan": plan, "current_step_index": 0, "approval_status": "NONE", "audit_trail": audit_trail}
 
 def simulate_tool_execution(tool: str, args: Dict[str, Any]) -> str:
-    if "calendar.find_slot" in tool:
+    if "assistant.reply" in tool:
+        return "Hello! How can I assist you with your tasks today?"
+    elif "reasoning_engine" in tool or "intent.analyze" in tool:
+        return f"Parsed intent and parameters for request."
+    elif "email_writer" in tool:
+        return f"Drafted content for: '{args.get('subject', 'Email')}'."
+    elif "calendar.find_slot" in tool:
         return "Slot confirmed: Tomorrow at 10:30 AM (Available window: 10:00 - 11:30 AM)."
     elif "calendar.reschedule" in tool:
         return f"Calendar invite updated for {args.get('attendee', 'attendee')} at {args.get('time', '10:30 AM')}."
     elif "document.generate_draft" in tool:
         return f"Draft generated: '{args.get('topic', 'Proposal')}.pdf' (Size: 124 KB)."
     elif "email.send_message" in tool:
-        return f"Dispatched SMTP message to {args.get('to')} (Subject: '{args.get('subject')}')."
+        return f"Dispatched SMTP message to {args.get('recipient', args.get('to', 'recipient'))}."
+    elif "web_search" in tool:
+        return f"Search completed: Fetched context results for query."
     return f"Completed execution for {tool}."
 
 def executor_node(state: AgentState) -> Dict[str, Any]:
