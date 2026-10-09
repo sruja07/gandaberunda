@@ -24,7 +24,6 @@ interface ChatMessage {
   sender: 'user' | 'assistant';
   text: string;
   timestamp: string;
-  status?: 'sending' | 'waiting_for_backend' | 'delivered';
 }
 
 interface ChatHistoryItem {
@@ -177,28 +176,30 @@ export default function CopilotPage() {
     }
   };
 
-  const handleSendMessage = () => {
-    if (!input.trim()) return;
+  const handleSendMessage = async () => {
+    const promptText = input.trim();
+    if (!promptText) return;
     setIsSubmitting(true);
 
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: 'user',
-      text: input.trim(),
+      text: promptText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    const updatedMessages = [...activeMessages, userMessage];
+    let updatedMessages = [...activeMessages, userMessage];
     setActiveMessages(updatedMessages);
+    setInput("");
 
-    // Save to history sidebar
+    // Save user prompt to sidebar history
     let currentChatId = activeChatId;
     if (!currentChatId) {
       currentChatId = `chat-${Date.now()}`;
       setActiveChatId(currentChatId);
       const newHistoryItem: ChatHistoryItem = {
         id: currentChatId,
-        title: input.trim(),
+        title: promptText,
         timestamp: 'Just now',
         messages: updatedMessages
       };
@@ -209,8 +210,34 @@ export default function CopilotPage() {
       ));
     }
 
-    setInput("");
-    setIsSubmitting(false);
+    // Connect to Backend API when backend service is live & ready
+    try {
+      const res = await fetch('http://localhost:5000/api/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.outputContent) {
+          const botMessage: ChatMessage = {
+            id: `bot-${Date.now()}`,
+            sender: 'assistant',
+            text: data.outputContent,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          updatedMessages = [...updatedMessages, botMessage];
+          setActiveMessages(updatedMessages);
+          setChatHistory(prev => prev.map(chat => 
+            chat.id === currentChatId ? { ...chat, messages: updatedMessages } : chat
+          ));
+        }
+      }
+    } catch (e) {
+      console.log('Backend API connection pending or offline.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -332,7 +359,7 @@ export default function CopilotPage() {
               How can I help you today?
             </h1>
             <p className="text-slate-500 text-sm md:text-base font-medium">
-              Frontend Interface — Ready for Backend API Integration
+              Frontend Interface — Connected to Backend API
             </p>
           </div>
 
@@ -350,28 +377,29 @@ export default function CopilotPage() {
 
             {activeMessages.map((msg) => (
               <div key={msg.id} className="space-y-3">
-                {/* User Message Bubble */}
-                <div className="flex items-start justify-end gap-3">
-                  <div className="bg-gradient-to-r from-rose-500 via-purple-500 to-indigo-600 text-white p-4 rounded-2xl max-w-lg shadow-md">
-                    <p className="text-sm font-medium leading-relaxed">{msg.text}</p>
-                    <span className="text-[10px] text-white/70 block text-right mt-1">{msg.timestamp}</span>
+                {msg.sender === 'user' ? (
+                  <div className="flex items-start justify-end gap-3">
+                    <div className="bg-gradient-to-r from-rose-500 via-purple-500 to-indigo-600 text-white p-4 rounded-2xl max-w-lg shadow-md">
+                      <p className="text-sm font-medium leading-relaxed">{msg.text}</p>
+                      <span className="text-[10px] text-white/70 block text-right mt-1">{msg.timestamp}</span>
+                    </div>
+                    <div className="p-2 bg-purple-100 text-purple-700 rounded-full shrink-0">
+                      <User size={18} />
+                    </div>
                   </div>
-                  <div className="p-2 bg-purple-100 text-purple-700 rounded-full shrink-0">
-                    <User size={18} />
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gradient-to-tr from-rose-500 to-purple-600 text-white rounded-full shrink-0">
+                      <Bot size={18} />
+                    </div>
+                    <div className="bg-white/95 border border-purple-100 p-5 rounded-2xl max-w-lg shadow-sm">
+                      <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 leading-relaxed">
+                        {msg.text}
+                      </pre>
+                      <span className="text-[10px] text-slate-400 block text-right mt-2">{msg.timestamp}</span>
+                    </div>
                   </div>
-                </div>
-
-                {/* Assistant Ready Placeholder */}
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gradient-to-tr from-rose-500 to-purple-600 text-white rounded-full shrink-0">
-                    <Bot size={18} />
-                  </div>
-                  <div className="bg-white/90 border border-purple-100 p-4 rounded-2xl max-w-lg shadow-sm">
-                    <p className="text-xs text-slate-400 font-medium italic">
-                      [Backend API Pending Integration] — Ready to connect with Agent Graph API endpoint.
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
             ))}
           </div>
@@ -401,7 +429,7 @@ export default function CopilotPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={isListening ? "Listening..." : "Ask Copilot AI or click mic to speak..."}
-                    className="w-full bg-transparent border-none focus:ring-0 resize-none py-1.5 text-slate-800 max-h-24 text-sm placeholder:text-slate-400 font-medium"
+                    className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus:border-none ring-0 border-0 shadow-none resize-none py-1.5 text-slate-800 max-h-24 text-sm placeholder:text-slate-400 font-medium"
                     rows={1}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
