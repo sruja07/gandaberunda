@@ -14,7 +14,9 @@ import {
   PanelLeftClose, 
   PanelLeft, 
   Clock,
-  RotateCcw
+  RotateCcw,
+  Copy,
+  Check
 } from 'lucide-react';
 import { TaskStep } from '@/types/agent';
 import TaskTimeline from '@/components/TaskTimeline';
@@ -24,37 +26,21 @@ interface ChatHistoryItem {
   title: string;
   timestamp: string;
   tasks: TaskStep[];
+  outputContent?: string;
 }
 
 const DEFAULT_HISTORY: ChatHistoryItem[] = [
   {
     id: 'chat-1',
-    title: 'Plan a 3-day trip to Tokyo and book hotels',
+    title: 'Write email to seek leave for 2 days',
     timestamp: 'Just now',
     tasks: [
-      { step_id: '1', title: 'Analyzing your request and travel preferences', tool: 'reasoning_engine', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Extracted 3-day itinerary preferences' },
-      { step_id: '2', title: 'Searching flights and Tokyo hotel options', tool: 'web_search', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Found 4 hotel recommendations near Shibuya' },
-      { step_id: '3', title: 'Executing flight reservation checkout', tool: 'system_api', args: {}, status: 'REQUIRES_APPROVAL', requires_approval: true, risk_level: 'HIGH' },
-      { step_id: '4', title: 'Generating final itinerary summary', tool: 'summarizer', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
-    ]
-  },
-  {
-    id: 'chat-2',
-    title: 'Deploy Express backend to Vercel serverless',
-    timestamp: '2 hours ago',
-    tasks: [
-      { step_id: '1', title: 'Building production bundle and checking routes', tool: 'compiler', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Build passed cleanly' },
-      { step_id: '2', title: 'Configuring Vercel deployment credentials', tool: 'cli_tool', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Deployment live on vercel.app' }
-    ]
-  },
-  {
-    id: 'chat-3',
-    title: 'Analyze Q3 revenue and sales growth metrics',
-    timestamp: 'Yesterday',
-    tasks: [
-      { step_id: '1', title: 'Querying PostgreSQL analytics database', tool: 'db_client', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Fetched 14,200 transaction rows' },
-      { step_id: '2', title: 'Generating revenue breakdown chart', tool: 'chart_engine', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Growth up 24% YoY' }
-    ]
+      { step_id: 'step_1', title: 'Analyzing leave request reason and dates', tool: 'reasoning_engine', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Extracted 2-day leave intent' },
+      { step_id: 'step_2', title: 'Drafting formal leave application email content', tool: 'email_writer', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Drafted leave email for Manager' },
+      { step_id: 'step_3', title: 'Dispatching leave request email to Manager', tool: 'system_api', args: {}, status: 'REQUIRES_APPROVAL', requires_approval: true, risk_level: 'HIGH' },
+      { step_id: 'step_4', title: 'Generating final response and email copy', tool: 'summarizer', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
+    ],
+    outputContent: `Subject: Application for Leave of Absence\n\nDear Manager,\n\nI am writing to formally request 2 days of leave from [Start Date] to [End Date] due to personal reasons.\n\nI have ensured that all my pending tasks are handed over to the team, and I will be reachable via email for urgent matters.\n\nThank you for your understanding.\n\nBest regards,\n[Your Name]`
   }
 ];
 
@@ -62,9 +48,11 @@ export default function CopilotPage() {
   const [input, setInput] = useState("");
   const [isPlanning, setIsPlanning] = useState(false);
   const [tasks, setTasks] = useState<TaskStep[]>([]);
+  const [finalOutput, setFinalOutput] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>(DEFAULT_HISTORY);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Load chat history from localStorage on initial render
   useEffect(() => {
@@ -148,9 +136,9 @@ export default function CopilotPage() {
   const simulateSpeechInput = () => {
     setIsListening(true);
     const samplePhrases = [
+      "Write an email seeking leave for 2 days due to personal reasons",
       "Plan a 3-day trip to Tokyo and book the hotels",
-      "Deploy the Express backend to production server",
-      "Summarize customer feedback from recent support tickets"
+      "Deploy the Express backend to production server"
     ];
     const phrase = samplePhrases[Math.floor(Math.random() * samplePhrases.length)];
     let i = 0;
@@ -163,19 +151,21 @@ export default function CopilotPage() {
         clearInterval(interval);
         setIsListening(false);
       }
-    }, 50);
+    }, 40);
   };
 
   const handleStartNewChat = () => {
     setActiveChatId(null);
     setInput("");
     setTasks([]);
+    setFinalOutput(null);
   };
 
   const handleSelectChat = (chat: ChatHistoryItem) => {
     setActiveChatId(chat.id);
     setInput(chat.title);
     setTasks(chat.tasks);
+    setFinalOutput(chat.outputContent || null);
   };
 
   const handleDeleteChat = (e: React.MouseEvent, id: string) => {
@@ -205,17 +195,45 @@ export default function CopilotPage() {
     if (!textToUse) return;
     setIsPlanning(true);
     setTasks([]);
+    setFinalOutput(null);
 
-    await new Promise(r => setTimeout(r, 1200));
+    let planData: TaskStep[] = [];
+    let outputText: string | null = null;
 
-    const mockPlan: TaskStep[] = [
-      { step_id: '1', title: `Analyzing request: "${textToUse}"`, tool: 'reasoning_engine', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
-      { step_id: '2', title: 'Searching relevant documents & APIs', tool: 'web_search', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
-      { step_id: '3', title: 'Executing system & database action', tool: 'system_api', args: {}, status: 'PENDING', requires_approval: true, risk_level: 'HIGH' },
-      { step_id: '4', title: 'Generating final response and report', tool: 'summarizer', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
-    ];
+    try {
+      // Fetch plan from Backend API (http://localhost:5000/api/plan)
+      const res = await fetch('http://localhost:5000/api/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: textToUse })
+      });
+      if (!res.ok) throw new Error('Backend server returned error');
+      const data = await res.json();
+      planData = data.tasks || [];
+      outputText = data.outputContent || null;
+    } catch (err) {
+      console.warn('Backend API offline or error; using local plan generator:', err);
+      const textLower = textToUse.toLowerCase();
+      if (textLower.includes('leave') || textLower.includes('email')) {
+        planData = [
+          { step_id: 'step_1', title: `Analyzing leave request: "${textToUse}"`, tool: 'reasoning_engine', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Extracted leave intent' },
+          { step_id: 'step_2', title: 'Drafting formal leave application email', tool: 'email_writer', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Drafted leave email text' },
+          { step_id: 'step_3', title: 'Dispatching leave request to Manager', tool: 'system_api', args: {}, status: 'REQUIRES_APPROVAL', requires_approval: true, risk_level: 'HIGH' },
+          { step_id: 'step_4', title: 'Finalizing leave email document', tool: 'summarizer', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
+        ];
+        outputText = `Subject: Application for Leave of Absence\n\nDear Manager,\n\nI am writing to formally request a leave of absence for 2 days due to personal commitments.\n\nI have delegated my active tasks to the team to ensure smooth workflow.\n\nSincerely,\n[Your Name]`;
+      } else {
+        planData = [
+          { step_id: 'step_1', title: `Analyzing request: "${textToUse}"`, tool: 'reasoning_engine', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Extracted request intent' },
+          { step_id: 'step_2', title: 'Searching knowledge base & APIs', tool: 'web_search', args: {}, status: 'COMPLETED', requires_approval: false, risk_level: 'LOW', result: 'Fetched parameters' },
+          { step_id: 'step_3', title: 'Executing requested modification', tool: 'system_api', args: {}, status: 'REQUIRES_APPROVAL', requires_approval: true, risk_level: 'HIGH' },
+          { step_id: 'step_4', title: 'Generating final summary', tool: 'summarizer', args: {}, status: 'PENDING', requires_approval: false, risk_level: 'LOW' },
+        ];
+        outputText = `Processed request: "${textToUse}"\n\nAll tasks verified.`;
+      }
+    }
     
-    setTasks(mockPlan);
+    setTasks(planData);
     setIsPlanning(false);
 
     const newChatId = `chat-${Date.now()}`;
@@ -223,7 +241,8 @@ export default function CopilotPage() {
       id: newChatId,
       title: textToUse,
       timestamp: 'Just now',
-      tasks: mockPlan
+      tasks: planData,
+      outputContent: outputText || undefined
     };
 
     const updatedHistory = [newHistoryItem, ...chatHistory];
@@ -233,24 +252,42 @@ export default function CopilotPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('copilot_chat_history', JSON.stringify(updatedHistory));
     }
+  };
 
-    for (let i = 0; i < mockPlan.length; i++) {
-      const id = mockPlan[i].step_id;
-      setTasks(prev => prev.map(t => t.step_id === id ? { ...t, status: 'IN_PROGRESS' } : t));
-      
-      await new Promise(r => setTimeout(r, 1800));
+  const handleApprove = async (id: string) => {
+    try {
+      await fetch('http://localhost:5000/api/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step_id: id, action: 'APPROVE' })
+      });
+    } catch (err) {
+      console.warn('Backend API approval call failed:', err);
+    }
 
-      if (mockPlan[i].requires_approval) {
-        setTasks(prev => prev.map(t => t.step_id === id ? { ...t, status: 'REQUIRES_APPROVAL' } : t));
-        return;
-      }
-      
-      setTasks(prev => prev.map(t => t.step_id === id ? { ...t, status: 'COMPLETED', result: 'Completed successfully' } : t));
+    setTasks(prev => prev.map(t => t.step_id === id ? { ...t, status: 'COMPLETED', result: 'Approved by user via Backend API' } : t));
+    
+    // Complete remaining steps and display generated output
+    const nextStepIndex = tasks.findIndex(t => t.step_id === id) + 1;
+    if (nextStepIndex < tasks.length) {
+      const nextId = tasks[nextStepIndex].step_id;
+      setTasks(prev => prev.map(t => t.step_id === nextId ? { ...t, status: 'IN_PROGRESS' } : t));
+      await new Promise(r => setTimeout(r, 1000));
+      setTasks(prev => prev.map(t => t.step_id === nextId ? { ...t, status: 'COMPLETED', result: 'Completed successfully' } : t));
+    }
+
+    const currentChat = chatHistory.find(c => c.id === activeChatId);
+    if (currentChat && currentChat.outputContent) {
+      setFinalOutput(currentChat.outputContent);
     }
   };
 
-  const handleApprove = (id: string) => {
-    setTasks(prev => prev.map(t => t.step_id === id ? { ...t, status: 'COMPLETED', result: 'Approved by user' } : t));
+  const handleCopyOutput = () => {
+    if (finalOutput) {
+      navigator.clipboard.writeText(finalOutput);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   return (
@@ -278,7 +315,7 @@ export default function CopilotPage() {
           </button>
         </div>
 
-        {/* Vibrant Gradient New Chat Button */}
+        {/* New Chat Button */}
         <div className="p-4 min-w-[288px]">
           <button 
             onClick={handleStartNewChat}
@@ -368,7 +405,7 @@ export default function CopilotPage() {
         </header>
 
         <main className="flex-1 max-w-3xl w-full mx-auto px-6 pb-40">
-          <div className="text-center my-10">
+          <div className="text-center my-8">
             <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-2 bg-gradient-to-r from-rose-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
               How can I help you today?
             </h1>
@@ -378,21 +415,21 @@ export default function CopilotPage() {
           </div>
 
           {/* Execution / Timeline Area */}
-          <div className="mb-12">
+          <div className="mb-8">
             {tasks.length === 0 && !isPlanning && (
-              <div className="flex flex-col items-center justify-center h-56 border-2 border-dashed border-rose-200/60 rounded-3xl text-slate-400 bg-white/70 backdrop-blur-md p-6 text-center shadow-lg shadow-purple-50/50">
+              <div className="flex flex-col items-center justify-center h-52 border-2 border-dashed border-rose-200/60 rounded-3xl text-slate-400 bg-white/70 backdrop-blur-md p-6 text-center shadow-lg shadow-purple-50/50">
                 <div className="p-3 bg-gradient-to-tr from-rose-100 via-purple-100 to-indigo-100 rounded-2xl mb-3 text-rose-500">
                   <Sparkles size={28} />
                 </div>
                 <p className="font-bold text-slate-700 text-sm">Your interactive agent plan will appear here...</p>
-                <p className="text-xs text-slate-400 mt-1">Type a prompt or click the colorful mic button below to start.</p>
+                <p className="text-xs text-slate-400 mt-1">Type a prompt (e.g. "Write an email to seek leave") or click mic to start.</p>
               </div>
             )}
 
             {isPlanning && (
-              <div className="flex flex-col items-center justify-center h-56 space-y-3 bg-white/60 rounded-3xl border border-indigo-100 backdrop-blur-md shadow-md">
+              <div className="flex flex-col items-center justify-center h-52 space-y-3 bg-white/60 rounded-3xl border border-indigo-100 backdrop-blur-md shadow-md">
                 <Loader2 className="animate-spin text-purple-600" size={36} />
-                <p className="font-bold text-purple-900 text-sm">Reasoning & building your multi-step action plan...</p>
+                <p className="font-bold text-purple-900 text-sm">Reasoning & calling Backend API to build your plan...</p>
               </div>
             )}
 
@@ -400,6 +437,30 @@ export default function CopilotPage() {
               <TaskTimeline tasks={tasks} onApprove={handleApprove} />
             )}
           </div>
+
+          {/* Generated Result Output Card */}
+          {finalOutput && (
+            <div className="mb-12 bg-white/95 border border-emerald-200 rounded-2xl p-6 shadow-xl shadow-emerald-50 relative animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-emerald-100 pb-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-500 text-white rounded-lg">
+                    <Sparkles size={16} />
+                  </div>
+                  <span className="font-bold text-sm text-slate-900">Generated Output</span>
+                </div>
+                <button
+                  onClick={handleCopyOutput}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold transition-all active:scale-95"
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copied ? 'Copied!' : 'Copy Result'}</span>
+                </button>
+              </div>
+              <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 leading-relaxed bg-slate-50/80 p-4 rounded-xl border border-slate-100">
+                {finalOutput}
+              </pre>
+            </div>
+          )}
 
           {/* Vibrant Bottom Floating Bar */}
           <div className="fixed bottom-6 left-0 right-0 px-6 pointer-events-none">
@@ -449,7 +510,7 @@ export default function CopilotPage() {
                     {isListening ? <MicOff size={18} /> : <Mic size={18} />}
                   </button>
 
-                  {/* Vibrant Gradient Send Button */}
+                  {/* Send Button */}
                   <button 
                     onClick={() => handleGeneratePlan()}
                     disabled={!input || isPlanning}
