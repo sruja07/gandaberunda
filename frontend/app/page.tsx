@@ -50,10 +50,20 @@ export default function CopilotPage() {
       if (savedHistory) {
         try {
           const parsed = JSON.parse(savedHistory);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            // Filter out old mock chat history items
-            const filtered = parsed.filter((item: ChatHistoryItem) => item.id !== 'chat-1');
+          if (Array.isArray(parsed)) {
+            // Filter out any legacy mock chat items created during mock testing phase
+            const filtered = parsed.filter((item: ChatHistoryItem) => {
+              if (item.id === 'chat-1') return false;
+              if (item.tasks && item.tasks.some(t => t.step_id === 'step_1' || t.tool === 'reasoning_engine')) return false;
+              if (item.outputContent && item.outputContent.includes('Application for Leave of Absence')) return false;
+              return true;
+            });
             setChatHistory(filtered);
+            if (filtered.length === 0) {
+              localStorage.removeItem('copilot_chat_history');
+            } else {
+              localStorage.setItem('copilot_chat_history', JSON.stringify(filtered));
+            }
           }
         } catch (e) {
           console.error('Failed to parse chat history from localStorage:', e);
