@@ -14,7 +14,8 @@ import {
   PanelLeftClose, 
   PanelLeft, 
   Clock,
-  Zap
+  Zap,
+  RotateCcw
 } from 'lucide-react';
 import { TaskStep } from '@/types/agent';
 import TaskTimeline from '@/components/TaskTimeline';
@@ -65,6 +66,30 @@ export default function CopilotPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>(DEFAULT_HISTORY);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+
+  // Load chat history from localStorage on initial render
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedHistory = localStorage.getItem('copilot_chat_history');
+      if (savedHistory) {
+        try {
+          const parsed = JSON.parse(savedHistory);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setChatHistory(parsed);
+          }
+        } catch (e) {
+          console.error('Failed to parse chat history from localStorage:', e);
+        }
+      }
+    }
+  }, []);
+
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && chatHistory.length > 0) {
+      localStorage.setItem('copilot_chat_history', JSON.stringify(chatHistory));
+    }
+  }, [chatHistory]);
 
   // Speech Recognition State
   const [isListening, setIsListening] = useState(false);
@@ -156,8 +181,22 @@ export default function CopilotPage() {
 
   const handleDeleteChat = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setChatHistory(prev => prev.filter(item => item.id !== id));
+    const updated = chatHistory.filter(item => item.id !== id);
+    setChatHistory(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('copilot_chat_history', JSON.stringify(updated));
+    }
     if (activeChatId === id) {
+      handleStartNewChat();
+    }
+  };
+
+  const handleClearAllHistory = () => {
+    if (window.confirm('Clear all stored chat history?')) {
+      setChatHistory([]);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('copilot_chat_history');
+      }
       handleStartNewChat();
     }
   };
@@ -187,8 +226,14 @@ export default function CopilotPage() {
       timestamp: 'Just now',
       tasks: mockPlan
     };
-    setChatHistory(prev => [newHistoryItem, ...prev]);
+
+    const updatedHistory = [newHistoryItem, ...chatHistory];
+    setChatHistory(updatedHistory);
     setActiveChatId(newChatId);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('copilot_chat_history', JSON.stringify(updatedHistory));
+    }
 
     for (let i = 0; i < mockPlan.length; i++) {
       const id = mockPlan[i].step_id;
@@ -224,6 +269,7 @@ export default function CopilotPage() {
               <Clock size={14} />
             </div>
             <span>Recent History</span>
+            <span className="text-[10px] bg-rose-100 text-rose-600 font-bold px-1.5 py-0.5 rounded-full">Saved</span>
           </div>
           <button 
             onClick={() => setSidebarOpen(false)}
@@ -244,35 +290,54 @@ export default function CopilotPage() {
           </button>
         </div>
 
-        {/* Chat History List with Gradient Highlight */}
+        {/* Chat History List with LocalStorage Persistence */}
         <div className="flex-1 overflow-y-auto px-3 space-y-1.5 py-2 min-w-[288px]">
-          {chatHistory.map((chat) => (
-            <div
-              key={chat.id}
-              onClick={() => handleSelectChat(chat)}
-              className={`group flex items-center justify-between p-3 rounded-2xl cursor-pointer transition-all ${
-                activeChatId === chat.id 
-                  ? 'bg-gradient-to-r from-rose-50 via-purple-50 to-indigo-50 border-l-4 border-rose-500 text-slate-900 font-semibold shadow-sm border-y border-r border-rose-100' 
-                  : 'hover:bg-slate-50 text-slate-600'
-              }`}
-            >
-              <div className="flex items-center gap-3 overflow-hidden">
-                <MessageSquare size={16} className={activeChatId === chat.id ? 'text-rose-500 shrink-0' : 'text-slate-400 shrink-0'} />
-                <div className="truncate">
-                  <p className="text-xs font-semibold truncate leading-tight">{chat.title}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">{chat.timestamp}</p>
-                </div>
-              </div>
-              <button
-                onClick={(e) => handleDeleteChat(e, chat.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 rounded-full hover:bg-white transition-all shrink-0"
-                title="Delete Chat"
-              >
-                <Trash2 size={13} />
-              </button>
+          {chatHistory.length === 0 ? (
+            <div className="text-center py-8 px-4 text-slate-400 text-xs">
+              No recent history saved. Start a new prompt!
             </div>
-          ))}
+          ) : (
+            chatHistory.map((chat) => (
+              <div
+                key={chat.id}
+                onClick={() => handleSelectChat(chat)}
+                className={`group flex items-center justify-between p-3 rounded-2xl cursor-pointer transition-all ${
+                  activeChatId === chat.id 
+                    ? 'bg-gradient-to-r from-rose-50 via-purple-50 to-indigo-50 border-l-4 border-rose-500 text-slate-900 font-semibold shadow-sm border-y border-r border-rose-100' 
+                    : 'hover:bg-slate-50 text-slate-600'
+                }`}
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <MessageSquare size={16} className={activeChatId === chat.id ? 'text-rose-500 shrink-0' : 'text-slate-400 shrink-0'} />
+                  <div className="truncate">
+                    <p className="text-xs font-semibold truncate leading-tight">{chat.title}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{chat.timestamp}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => handleDeleteChat(e, chat.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 rounded-full hover:bg-white transition-all shrink-0"
+                  title="Delete Chat"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))
+          )}
         </div>
+
+        {/* Footer Clear History Button */}
+        {chatHistory.length > 0 && (
+          <div className="p-3 border-t border-slate-100 min-w-[288px]">
+            <button
+              onClick={handleClearAllHistory}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+            >
+              <RotateCcw size={12} />
+              <span>Clear History</span>
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main Content Area */}
