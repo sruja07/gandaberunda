@@ -15,36 +15,38 @@ import {
   PanelLeft, 
   Clock,
   RotateCcw,
-  Copy,
-  Check
+  User,
+  Bot
 } from 'lucide-react';
+
+interface ChatMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  timestamp: string;
+  status?: 'sending' | 'waiting_for_backend' | 'delivered';
+}
 
 interface ChatHistoryItem {
   id: string;
   title: string;
   timestamp: string;
-  outputContent: string;
+  messages: ChatMessage[];
 }
-
-const DEFAULT_HISTORY: ChatHistoryItem[] = [
-  {
-    id: 'chat-1',
-    title: 'Write email to seek leave for 2 days',
-    timestamp: 'Just now',
-    outputContent: `Subject: Application for Leave of Absence\n\nDear Manager,\n\nI am writing to formally request 2 days of leave from [Start Date] to [End Date] due to personal reasons.\n\nI have ensured that all my pending tasks are handed over to the team, and I will be reachable via email for urgent matters.\n\nThank you for your understanding.\n\nBest regards,\n[Your Name]`
-  }
-];
 
 export default function CopilotPage() {
   const [input, setInput] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [finalOutput, setFinalOutput] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>(DEFAULT_HISTORY);
+  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [activeMessages, setActiveMessages] = useState<ChatMessage[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load chat history from localStorage on initial render
+  // Speech Recognition State
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Load saved history from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedHistory = localStorage.getItem('copilot_chat_history');
@@ -61,17 +63,14 @@ export default function CopilotPage() {
     }
   }, []);
 
-  // Save chat history to localStorage whenever it changes
+  // Save history to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined' && chatHistory.length > 0) {
       localStorage.setItem('copilot_chat_history', JSON.stringify(chatHistory));
     }
   }, [chatHistory]);
 
-  // Speech Recognition State
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
-
+  // Initialize Web Speech API
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -126,9 +125,9 @@ export default function CopilotPage() {
   const simulateSpeechInput = () => {
     setIsListening(true);
     const samplePhrases = [
-      "Write an email seeking leave for 2 days due to personal reasons",
-      "Plan a 3-day trip to Tokyo and book the hotels",
-      "Summarize customer feedback from recent support tickets"
+      "Write an email seeking leave for 2 days",
+      "Plan a 3-day trip to Tokyo and book hotels",
+      "Deploy Express backend to production server"
     ];
     const phrase = samplePhrases[Math.floor(Math.random() * samplePhrases.length)];
     let i = 0;
@@ -147,13 +146,13 @@ export default function CopilotPage() {
   const handleStartNewChat = () => {
     setActiveChatId(null);
     setInput("");
-    setFinalOutput(null);
+    setActiveMessages([]);
   };
 
   const handleSelectChat = (chat: ChatHistoryItem) => {
     setActiveChatId(chat.id);
-    setInput(chat.title);
-    setFinalOutput(chat.outputContent);
+    setInput("");
+    setActiveMessages(chat.messages || []);
   };
 
   const handleDeleteChat = (e: React.MouseEvent, id: string) => {
@@ -178,59 +177,46 @@ export default function CopilotPage() {
     }
   };
 
-  const generateDirectResponse = (userText: string) => {
-    const textLower = userText.toLowerCase();
+  const handleSendMessage = () => {
+    if (!input.trim()) return;
+    setIsSubmitting(true);
 
-    if (textLower.includes('leave') || textLower.includes('email') || textLower.includes('sick') || textLower.includes('vacation')) {
-      return `Subject: Application for Leave of Absence\n\nDear [Manager's Name],\n\nI am writing to formally request a leave of absence for [Number of Days] starting from [Start Date] to [End Date] due to [Reason, e.g., personal reasons / family emergency].\n\nI have delegated my key tasks to [Colleague's Name] to ensure all ongoing projects run smoothly during my absence. I will monitor urgent emails whenever possible.\n\nThank you for considering my request. Please let me know if you need any additional information.\n\nWarm regards,\n[Your Name]\n[Your Designation]`;
-    } else if (textLower.includes('tokyo') || textLower.includes('trip') || textLower.includes('travel') || textLower.includes('hotel')) {
-      return `✈️ 3-Day Tokyo Travel Itinerary & Recommendations:\n\nDay 1: Modern Tokyo\n- Visit Shibuya Crossing, Hachiko Statue, and Meiji Shrine in Harajuku.\n- Evening dinner in Shinjuku Golden Gai.\n\nDay 2: Historic Tokyo\n- Explore Tsukiji Outer Market for fresh sushi.\n- Visit Senso-ji Temple in Asakusa and view Tokyo Skytree.\n\nDay 3: Culture & Electronics\n- Visit Akihabara electronics hub and teamLab Planets digital art museum.\n\n🏨 Hotel Recommendation: Shibuya Excel Hotel Tokyu ($140/night).`;
-    } else {
-      return `Here is the response for: "${userText}"\n\nI am ready to assist you with your request. Let me know if you need any specific modifications or additional details!`;
-    }
-  };
-
-  const handleGeneratePlan = async (queryInput?: string) => {
-    const textToUse = queryInput || input;
-    if (!textToUse) return;
-    setIsGenerating(true);
-    setFinalOutput(null);
-
-    await new Promise(r => setTimeout(r, 800));
-
-    const responseContent = generateDirectResponse(textToUse);
-    setFinalOutput(responseContent);
-    setIsGenerating(false);
-
-    const newChatId = `chat-${Date.now()}`;
-    const newHistoryItem: ChatHistoryItem = {
-      id: newChatId,
-      title: textToUse,
-      timestamp: 'Just now',
-      outputContent: responseContent
+    const userMessage: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      sender: 'user',
+      text: input.trim(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    const updatedHistory = [newHistoryItem, ...chatHistory];
-    setChatHistory(updatedHistory);
-    setActiveChatId(newChatId);
+    const updatedMessages = [...activeMessages, userMessage];
+    setActiveMessages(updatedMessages);
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('copilot_chat_history', JSON.stringify(updatedHistory));
+    // Save to history sidebar
+    let currentChatId = activeChatId;
+    if (!currentChatId) {
+      currentChatId = `chat-${Date.now()}`;
+      setActiveChatId(currentChatId);
+      const newHistoryItem: ChatHistoryItem = {
+        id: currentChatId,
+        title: input.trim(),
+        timestamp: 'Just now',
+        messages: updatedMessages
+      };
+      setChatHistory(prev => [newHistoryItem, ...prev]);
+    } else {
+      setChatHistory(prev => prev.map(chat => 
+        chat.id === currentChatId ? { ...chat, messages: updatedMessages } : chat
+      ));
     }
-  };
 
-  const handleCopyOutput = () => {
-    if (finalOutput) {
-      navigator.clipboard.writeText(finalOutput);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    setInput("");
+    setIsSubmitting(false);
   };
 
   return (
     <div className="flex h-screen w-screen bg-gradient-to-br from-rose-50/60 via-slate-50 to-indigo-50/60 text-slate-800 font-sans overflow-hidden">
       
-      {/* Colorful Left Sidebar */}
+      {/* Sidebar - Recent Chat History */}
       <aside 
         className={`bg-white/90 backdrop-blur-xl border-r border-rose-100/80 flex flex-col shrink-0 transition-all duration-300 z-30 shadow-xl ${
           sidebarOpen ? 'w-72' : 'w-0 overflow-hidden border-none'
@@ -242,7 +228,6 @@ export default function CopilotPage() {
               <Clock size={14} />
             </div>
             <span>Recent History</span>
-            <span className="text-[10px] bg-rose-100 text-rose-600 font-bold px-1.5 py-0.5 rounded-full">Saved</span>
           </div>
           <button 
             onClick={() => setSidebarOpen(false)}
@@ -267,7 +252,7 @@ export default function CopilotPage() {
         <div className="flex-1 overflow-y-auto px-3 space-y-1.5 py-2 min-w-[288px]">
           {chatHistory.length === 0 ? (
             <div className="text-center py-8 px-4 text-slate-400 text-xs">
-              No recent history saved. Start a new prompt!
+              No recent chats. Start a new prompt!
             </div>
           ) : (
             chatHistory.map((chat) => (
@@ -341,60 +326,57 @@ export default function CopilotPage() {
           </div>
         </header>
 
-        <main className="flex-1 max-w-3xl w-full mx-auto px-6 pb-40">
-          <div className="text-center my-8">
+        <main className="flex-1 max-w-3xl w-full mx-auto px-6 pb-40 flex flex-col">
+          <div className="text-center my-6">
             <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-2 bg-gradient-to-r from-rose-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
               How can I help you today?
             </h1>
             <p className="text-slate-500 text-sm md:text-base font-medium">
-              Ask any question or prompt by text or voice.
+              Frontend Interface — Ready for Backend API Integration
             </p>
           </div>
 
-          {/* Area */}
-          <div className="mb-8">
-            {!finalOutput && !isGenerating && (
+          {/* Messages Display Area */}
+          <div className="flex-1 space-y-4 mb-8">
+            {activeMessages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-52 border-2 border-dashed border-rose-200/60 rounded-3xl text-slate-400 bg-white/70 backdrop-blur-md p-6 text-center shadow-lg shadow-purple-50/50">
                 <div className="p-3 bg-gradient-to-tr from-rose-100 via-purple-100 to-indigo-100 rounded-2xl mb-3 text-rose-500">
                   <Sparkles size={28} />
                 </div>
-                <p className="font-bold text-slate-700 text-sm">Your AI response will appear here...</p>
-                <p className="text-xs text-slate-400 mt-1">Type a prompt (e.g. "Write an email seeking leave") or click mic to start.</p>
+                <p className="font-bold text-slate-700 text-sm">Start a conversation...</p>
+                <p className="text-xs text-slate-400 mt-1">Type your prompt or use the voice microphone below.</p>
               </div>
             )}
 
-            {isGenerating && (
-              <div className="flex flex-col items-center justify-center h-52 space-y-3 bg-white/60 rounded-3xl border border-indigo-100 backdrop-blur-md shadow-md">
-                <Loader2 className="animate-spin text-purple-600" size={36} />
-                <p className="font-bold text-purple-900 text-sm">Generating your response...</p>
-              </div>
-            )}
-
-            {finalOutput && (
-              <div className="mb-12 bg-white/95 border border-purple-100 rounded-3xl p-6 shadow-xl shadow-purple-100/50 relative">
-                <div className="flex items-center justify-between border-b border-purple-50 pb-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-gradient-to-tr from-rose-500 to-purple-600 text-white rounded-lg">
-                      <Sparkles size={16} />
-                    </div>
-                    <span className="font-bold text-sm text-slate-900">Generated Output</span>
+            {activeMessages.map((msg) => (
+              <div key={msg.id} className="space-y-3">
+                {/* User Message Bubble */}
+                <div className="flex items-start justify-end gap-3">
+                  <div className="bg-gradient-to-r from-rose-500 via-purple-500 to-indigo-600 text-white p-4 rounded-2xl max-w-lg shadow-md">
+                    <p className="text-sm font-medium leading-relaxed">{msg.text}</p>
+                    <span className="text-[10px] text-white/70 block text-right mt-1">{msg.timestamp}</span>
                   </div>
-                  <button
-                    onClick={handleCopyOutput}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-semibold transition-all active:scale-95"
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                    <span>{copied ? 'Copied!' : 'Copy Result'}</span>
-                  </button>
+                  <div className="p-2 bg-purple-100 text-purple-700 rounded-full shrink-0">
+                    <User size={18} />
+                  </div>
                 </div>
-                <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 leading-relaxed bg-slate-50/80 p-5 rounded-2xl border border-slate-100">
-                  {finalOutput}
-                </pre>
+
+                {/* Assistant Ready Placeholder */}
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-gradient-to-tr from-rose-500 to-purple-600 text-white rounded-full shrink-0">
+                    <Bot size={18} />
+                  </div>
+                  <div className="bg-white/90 border border-purple-100 p-4 rounded-2xl max-w-lg shadow-sm">
+                    <p className="text-xs text-slate-400 font-medium italic">
+                      [Backend API Pending Integration] — Ready to connect with Agent Graph API endpoint.
+                    </p>
+                  </div>
+                </div>
               </div>
-            )}
+            ))}
           </div>
 
-          {/* Bottom Floating Bar */}
+          {/* Bottom Input Bar */}
           <div className="fixed bottom-6 left-0 right-0 px-6 pointer-events-none">
             <div className="max-w-2xl mx-auto pointer-events-auto">
               
@@ -424,7 +406,7 @@ export default function CopilotPage() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleGeneratePlan();
+                        handleSendMessage();
                       }
                     }}
                   />
@@ -444,8 +426,8 @@ export default function CopilotPage() {
 
                   {/* Send Button */}
                   <button 
-                    onClick={() => handleGeneratePlan()}
-                    disabled={!input || isGenerating}
+                    onClick={handleSendMessage}
+                    disabled={!input.trim() || isSubmitting}
                     className="p-2.5 bg-gradient-to-r from-rose-500 via-purple-500 to-indigo-600 hover:from-rose-600 hover:to-indigo-700 disabled:opacity-40 text-white rounded-full transition-all shadow-md shadow-purple-200 shrink-0 active:scale-95"
                     title="Send prompt"
                   >
