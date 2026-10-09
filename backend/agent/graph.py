@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 import re
 from typing import List, Dict, Any, Optional
@@ -9,7 +9,8 @@ from backend.agent.planner_prompt import SYSTEM_PLANNER_PROMPT
 from google import genai
 from google.genai import types
 
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
+api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+client = genai.Client(api_key=api_key) if api_key else None
 
 class TaskStep(BaseModel):
     step_id: str
@@ -43,6 +44,8 @@ def planner_node(state: AgentState) -> Dict[str, Any]:
     
     plan = []
     try:
+        if not client:
+            raise ValueError("GEMINI_API_KEY environment variable not provided.")
         prompt = f"{SYSTEM_PLANNER_PROMPT}\n\nUser Request: {user_text}\nDeconstruct into verified execution plan:"
         response = client.models.generate_content(
             model="gemma-4-26b-a4b-it",
