@@ -245,9 +245,10 @@ export default function CopilotPage() {
       setChatHistory(updatedHistory);
       setActiveChatId(newChatId);
     } catch (err: any) {
-      console.warn('Backend API connection error:', err);
+      console.warn('Backend API not connected:', err);
       setIsPlanning(false);
-      setBackendError('Backend API is not connected. Connect the backend server to generate and process plans.');
+      setTasks([]);
+      setFinalOutput(null);
     }
   };
 
@@ -411,22 +412,9 @@ export default function CopilotPage() {
             </p>
           </div>
 
-          {/* Backend Connection Error Banner */}
-          {backendError && (
-            <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-sm font-medium flex items-center gap-3 mb-6 shadow-sm animate-fadeIn">
-              <div className="p-2 bg-amber-100 rounded-xl text-amber-600 shrink-0">
-                <AlertCircle size={20} />
-              </div>
-              <div>
-                <p className="font-bold text-amber-900">Backend Not Connected</p>
-                <p className="text-xs text-amber-700 mt-0.5">{backendError}</p>
-              </div>
-            </div>
-          )}
-
           {/* Execution / Timeline Area */}
           <div className="mb-8">
-            {tasks.length === 0 && !isPlanning && !backendError && (
+            {tasks.length === 0 && !isPlanning && (
               <div className="flex flex-col items-center justify-center h-52 border-2 border-dashed border-rose-200/60 rounded-3xl text-slate-400 bg-white/70 backdrop-blur-md p-6 text-center shadow-lg shadow-purple-50/50">
                 <div className="p-3 bg-gradient-to-tr from-rose-100 via-purple-100 to-indigo-100 rounded-2xl mb-3 text-rose-500">
                   <Sparkles size={28} />
