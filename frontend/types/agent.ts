@@ -8,9 +8,3 @@ export interface TaskStep {
   risk_level: 'LOW' | 'HIGH';
   result?: string;
 }
-
-export interface AgentState {
-  isPlanning: boolean;
-  isExecuting: boolean;
-  tasks: TaskStep[];
-}
